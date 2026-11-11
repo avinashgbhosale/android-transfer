@@ -16,6 +16,7 @@ enum TransferJobState: String {
     case transferring = "Transferring"
     case completed = "Completed"
     case failed = "Failed"
+    case cancelled = "Cancelled"
 }
 struct TransferJob: Identifiable {
     let id: UUID
@@ -45,8 +46,12 @@ private let entryCallback: MTPEntryCallback = { object, storage, name, size, fol
 }
 private final class ProgressSink {
     let update: (Double) -> Void
+    let cancellation: TransferCancellation?
     var last = Date.distantPast
-    init(_ update: @escaping (Double) -> Void) { self.update = update }
+    init(cancellation: TransferCancellation? = nil, _ update: @escaping (Double) -> Void) {
+        self.cancellation = cancellation
+        self.update = update
+    }
 }
 private let progressCallback: MTPProgressCallback = { done, total, context in
     guard let context else { return 0 }
@@ -55,7 +60,7 @@ private let progressCallback: MTPProgressCallback = { done, total, context in
         sink.last = Date()
         sink.update(total == 0 ? 0 : min(1, Double(done) / Double(total)))
     }
-    return 0
+    return sink.cancellation?.isCancelled == true ? 1 : 0
 }
 
 // Every libmtp call, including connection lifetime, runs on this single queue.
@@ -71,8 +76,10 @@ final class TransferModel: ObservableObject {
     @Published var search = ""
     @Published var jobs: [TransferJob] = []
     @Published var dropTargeted = false
+    @Published var canCancel = false
     let queue = DispatchQueue(label: "AndroidTransfer.USB")
     private var session: OpaquePointer?
+    private let cancellation = TransferCancellation()
     var current: Location { path.last! }
     var selected: PhoneEntry? { entries.first { $0.id == selection } }
     var filtered: [PhoneEntry] { entries.filter { search.isEmpty || $0.name.localizedCaseInsensitiveContains(search) } }
@@ -91,6 +98,7 @@ final class TransferModel: ObservableObject {
     }
     private func run(_ message: String, transfer: Bool = false, work: @escaping () throws -> Void) {
         guard !busy else { return }
+        if transfer { cancellation.reset(); canCancel = true }
         busy = true; status = message; error = nil; progress = transfer ? 0 : nil
         queue.async {
             do { try work() }
@@ -98,8 +106,17 @@ final class TransferModel: ObservableObject {
                 let message = error.localizedDescription
                 DispatchQueue.main.async { self.error = message; self.status = "Operation failed. See details below." }
             }
-            DispatchQueue.main.async { self.busy = false; self.progress = nil }
+            DispatchQueue.main.async { self.busy = false; self.progress = nil; self.canCancel = false }
         }
+    }
+    func cancelTransfers() {
+        guard canCancel else { return }
+        cancellation.request()
+        canCancel = false
+        status = "Cancelling after the current device operation stops…"
+    }
+    private func throwIfCancelled() throws {
+        if cancellation.isCancelled { throw TransferError(message: "Transfer cancelled.") }
     }
     private func updateJob(_ id: UUID, state: TransferJobState? = nil, progress: Double? = nil, detail: String? = nil) {
         DispatchQueue.main.async {
@@ -111,7 +128,7 @@ final class TransferModel: ObservableObject {
     }
     func clearFinishedJobs() {
         guard !busy else { return }
-        jobs.removeAll { $0.state == .completed || $0.state == .failed }
+        jobs.removeAll { $0.state == .completed || $0.state == .failed || $0.state == .cancelled }
     }
     func connect() {
         guard !busy else { return }
@@ -246,7 +263,7 @@ final class TransferModel: ObservableObject {
         run("Downloading \(entry.name)…", transfer: true) {
             do {
                 self.updateJob(jobID, state: .transferring)
-                let sink = ProgressSink { value in
+                let sink = ProgressSink(cancellation: self.cancellation) { value in
                     DispatchQueue.main.async { self.progress = value }
                     self.updateJob(jobID, progress: value)
                 }
@@ -256,8 +273,13 @@ final class TransferModel: ObservableObject {
                 self.updateJob(jobID, state: .completed, progress: 1, detail: destination.path)
                 DispatchQueue.main.async { self.status = "Saved \(entry.name) to \(destination.deletingLastPathComponent().lastPathComponent)." }
             } catch {
-                self.updateJob(jobID, state: .failed, detail: error.localizedDescription)
-                throw error
+                if self.cancellation.isCancelled {
+                    self.updateJob(jobID, state: .cancelled, detail: "Cancelled; temporary data removed")
+                    DispatchQueue.main.async { self.status = "Download cancelled." }
+                } else {
+                    self.updateJob(jobID, state: .failed, detail: error.localizedDescription)
+                    throw error
+                }
             }
         }
     }
@@ -278,6 +300,7 @@ final class TransferModel: ObservableObject {
             do {
                 self.updateJob(jobID, state: .preparing)
                 let tree = try self.scanRemote(entry)
+                try self.throwIfCancelled()
                 self.updateJob(jobID, state: .transferring,
                                detail: "\(tree.fileCount) file(s)")
                 var completed: UInt64 = 0
@@ -293,12 +316,18 @@ final class TransferModel: ObservableObject {
                     self.status = "Saved folder \(entry.name) to \(parent.lastPathComponent)."
                 }
             } catch {
-                self.updateJob(jobID, state: .failed, detail: error.localizedDescription)
-                throw error
+                if self.cancellation.isCancelled {
+                    self.updateJob(jobID, state: .cancelled, detail: "Cancelled; temporary folder removed")
+                    DispatchQueue.main.async { self.status = "Folder download cancelled." }
+                } else {
+                    self.updateJob(jobID, state: .failed, detail: error.localizedDescription)
+                    throw error
+                }
             }
         }
     }
     private func scanRemote(_ entry: PhoneEntry) throws -> RemoteDownloadNode {
+        try throwIfCancelled()
         guard entry.folder else { return RemoteDownloadNode(entry: entry) }
         let children = try list(Location(storage: entry.storage, parent: entry.object, name: entry.name))
             .map(scanRemote)
@@ -306,6 +335,7 @@ final class TransferModel: ObservableObject {
     }
     private func downloadRemote(_ node: RemoteDownloadNode, into directory: URL, jobID: UUID,
                                 completed: inout UInt64, total: UInt64) throws {
+        try throwIfCancelled()
         let destination = directory.appendingPathComponent(FileSafety.safeName(node.entry.name),
                                                             isDirectory: node.entry.folder)
         if let children = node.children {
@@ -317,7 +347,7 @@ final class TransferModel: ObservableObject {
             return
         }
         let alreadyCompleted = completed
-        let sink = ProgressSink { value in
+        let sink = ProgressSink(cancellation: cancellation) { value in
             let aggregate = total == 0 ? 0 : (Double(alreadyCompleted) + value * Double(node.size)) / Double(total)
             DispatchQueue.main.async { self.progress = aggregate }
             self.updateJob(jobID, progress: aggregate, detail: "Downloading \(node.entry.name)")
@@ -365,9 +395,11 @@ final class TransferModel: ObservableObject {
         run("Preparing upload…", transfer: true) {
             var existing = try self.list(location)
             var failures = 0
+            var wasCancelled = false
             for (index, pair) in zip(urls, queued).enumerated() {
                 let file = pair.0, job = pair.1
                 do {
+                    try self.throwIfCancelled()
                     self.updateJob(job.id, state: .preparing, detail: "Scanning")
                     let node = try UploadScanner.scan(file)
                     try FileSafety.checkUpload(name: node.name, entries: existing)
@@ -385,6 +417,14 @@ final class TransferModel: ObservableObject {
                     self.updateJob(job.id, state: .completed, progress: 1,
                                    detail: node.isDirectory ? "\(count) file(s) uploaded" : "Uploaded")
                 } catch {
+                    if self.cancellation.isCancelled {
+                        wasCancelled = true
+                        self.updateJob(job.id, state: .cancelled, detail: "Cancelled")
+                        for remaining in queued.dropFirst(index + 1) {
+                            self.updateJob(remaining.id, state: .cancelled, detail: "Not started")
+                        }
+                        break
+                    }
                     failures += 1
                     self.updateJob(job.id, state: .failed, detail: error.localizedDescription)
                 }
@@ -392,13 +432,14 @@ final class TransferModel: ObservableObject {
             let entries = try self.list(location)
             DispatchQueue.main.async {
                 self.entries = entries
-                self.status = failures == 0 ? "Uploaded \(urls.count) item(s)." : "Finished with \(failures) failed item(s)."
+                self.status = wasCancelled ? "Upload queue cancelled." : failures == 0 ? "Uploaded \(urls.count) item(s)." : "Finished with \(failures) failed item(s)."
                 if failures > 0 { self.error = "Some items failed. Review the transfer queue for details." }
             }
         }
     }
     private func uploadNode(_ node: LocalUploadNode, storage: UInt32, parent: UInt32,
                             jobID: UUID, completed: inout UInt64, total: UInt64) throws {
+        try throwIfCancelled()
         try FileSafety.validatePhoneName(node.name)
         if let children = node.children {
             var folderID: UInt32 = 0
@@ -411,7 +452,7 @@ final class TransferModel: ObservableObject {
             return
         }
         let alreadyCompleted = completed
-        let sink = ProgressSink { value in
+        let sink = ProgressSink(cancellation: cancellation) { value in
             let aggregate = total == 0 ? 1 : (Double(alreadyCompleted) + value * Double(node.size)) / Double(total)
             DispatchQueue.main.async { self.progress = aggregate }
             self.updateJob(jobID, progress: aggregate, detail: "Uploading \(node.name)")

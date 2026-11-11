@@ -148,7 +148,8 @@ supported in wireless mode. Keep the app running and your Mac awake during trans
    removes the selected item after confirmation; Android MTP has no Trash recovery.
 5. **Upload to phone** opens a Mac file picker (multiple files supported).
    Files and complete folders are accepted. You can also drag files or folders
-   from Finder onto the phone file table. Transfers run sequentially in the queue.
+   from Finder onto the phone file table. Transfers run sequentially in the queue,
+   where **Cancel transfers** stops the active operation and skips queued uploads.
 6. Select a phone file or folder and click **Download to Mac** to choose a destination.
    Folders are downloaded recursively and published only after every file succeeds.
 7. Wait for completion and click **Disconnect** before unplugging.
@@ -164,7 +165,8 @@ Mac save dialog. Uploads reject existing names, including case-only differences.
 - Folder browsing, current-folder search, individual downloads, batch uploads,
   recursive folder uploads, Finder drag-and-drop, and a visible transfer queue.
 - Hidden files inside uploaded folders are skipped. Symbolic links are rejected.
-- No transfer resume or cancellation yet.
+- No transfer resume yet. Cancellation support depends on the phone honoring the
+  MTP callback; keep the cable connected until the app reports cancellation.
 - Keep the phone connected during transfers. A failed upload may leave an
   incomplete file on Android; inspect/remove it using the phone before retrying.
 - Android protected app folders may not be accessible through MTP.

@@ -137,8 +137,8 @@ struct ContentView: View {
                             LazyVStack(spacing: 8) {
                                 ForEach(model.jobs) { job in
                                     HStack(spacing: 10) {
-                                        Image(systemName: job.state == .completed ? "checkmark.circle.fill" : job.state == .failed ? "exclamationmark.triangle.fill" : "arrow.left.arrow.right.circle")
-                                            .foregroundStyle(job.state == .completed ? .green : job.state == .failed ? .orange : Color.accentColor)
+                                        Image(systemName: job.state == .completed ? "checkmark.circle.fill" : job.state == .failed ? "exclamationmark.triangle.fill" : job.state == .cancelled ? "xmark.circle.fill" : "arrow.left.arrow.right.circle")
+                                            .foregroundStyle(job.state == .completed ? Color.green : job.state == .failed ? Color.orange : job.state == .cancelled ? Color.secondary : Color.accentColor)
                                         VStack(alignment: .leading, spacing: 3) {
                                             HStack { Text(job.name).lineLimit(1); Spacer(); Text(job.state.rawValue).font(.caption).foregroundStyle(.secondary) }
                                             ProgressView(value: job.progress)
@@ -148,6 +148,9 @@ struct ContentView: View {
                                 }
                             }
                         }.frame(maxHeight: 170)
+                        if model.canCancel {
+                            Button("Cancel transfers", role: .destructive, action: model.cancelTransfers)
+                        }
                     }
                 }
                 if let error = model.error {

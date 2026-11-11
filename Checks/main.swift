@@ -23,6 +23,12 @@ for invalid in ["", "   ", ".", "..", "a/b", "a\\b", String(repeating: "x", coun
     expectFailure("invalid phone name: \(invalid)") { try FileSafety.validatePhoneName(invalid) }
 }
 try FileSafety.validatePhoneName("Summer photos")
+let cancellation = TransferCancellation()
+check(!cancellation.isCancelled, "cancellation starts clear")
+cancellation.request()
+check(cancellation.isCancelled, "cancellation request")
+cancellation.reset()
+check(!cancellation.isCancelled, "cancellation reset")
 let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
 try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
 defer { try? FileManager.default.removeItem(at: directory) }

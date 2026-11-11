@@ -1,5 +1,14 @@
 import Foundation
 
+public final class TransferCancellation: @unchecked Sendable {
+    private let lock = NSLock()
+    private var value = false
+    public init() {}
+    public var isCancelled: Bool { lock.withLock { value } }
+    public func request() { lock.withLock { value = true } }
+    public func reset() { lock.withLock { value = false } }
+}
+
 public struct PhoneEntry: Identifiable, Hashable {
     public let object: UInt32
     public let storage: UInt32
