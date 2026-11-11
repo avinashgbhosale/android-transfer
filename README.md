@@ -204,29 +204,3 @@ They also verify that a restart expires the old link and quitting waits for
 partial-upload cleanup.
 An actual Android browser is still needed to validate QR scanning, Wi-Fi reachability,
 and the file-picker/download experience on your phone.
-
-## GitHub repository
-
-This folder is a standalone Swift package and Git repository. Build caches,
-exported `.app`/DMG files, local environment files, and editor settings are ignored.
-Keep generated installers outside Git history; they can be attached to a release
-after completing the distribution steps above.
-
-To create a private GitHub repository and push the local commits using the
-[GitHub CLI](https://cli.github.com/):
-
-```sh
-brew install gh
-gh auth login
-gh repo create android-transfer --private --source=. --remote=origin --push
-```
-
-For an existing empty repository, configure its actual URL and push:
-
-```sh
-git remote add origin https://github.com/YOUR-ACCOUNT/android-transfer.git
-git push -u origin main
-```
-
-Use only one of these setup methods. After the remote exists, publish later changes
-with `git push`. Do not commit access tokens or signing credentials.
