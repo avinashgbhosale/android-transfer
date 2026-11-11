@@ -143,6 +143,7 @@ supported in wireless mode. Keep the app running and your Mac awake during trans
    Allow file access if requested. Quit other MTP apps if connection fails.
 3. Click **Connect phone**, select a storage location, and click **Open folder**.
 4. Navigate into folders the same way. Use the up arrow to return to a parent.
+   Use **New folder** to create a directory in the current phone location.
 5. **Upload to phone** opens a Mac file picker (multiple files supported).
    Files and complete folders are accepted. You can also drag files or folders
    from Finder onto the phone file table. Transfers run sequentially in the queue.

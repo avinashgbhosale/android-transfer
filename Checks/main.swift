@@ -19,6 +19,10 @@ check(FileSafety.safeName("夏の写真.jpg") == "夏の写真.jpg", "Unicode na
 let existing = [PhoneEntry(object: 1, storage: 1, name: "Photos", size: 0, folder: true)]
 expectFailure("duplicate upload") { try FileSafety.checkUpload(name: "photos", entries: existing) }
 try FileSafety.checkUpload(name: "new.jpg", entries: existing)
+for invalid in ["", "   ", ".", "..", "a/b", "a\\b", String(repeating: "x", count: 241)] {
+    expectFailure("invalid phone name: \(invalid)") { try FileSafety.validatePhoneName(invalid) }
+}
+try FileSafety.validatePhoneName("Summer photos")
 let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
 try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
 defer { try? FileManager.default.removeItem(at: directory) }

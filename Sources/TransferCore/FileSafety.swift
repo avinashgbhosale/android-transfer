@@ -22,8 +22,16 @@ public enum FileSafety {
         return last == "." || last == ".." ? "Download" : last
     }
     public static func checkUpload(name: String, entries: [PhoneEntry]) throws {
+        try validatePhoneName(name)
         if entries.contains(where: { $0.name.caseInsensitiveCompare(name) == .orderedSame }) {
             throw TransferError(message: "A file or folder named ‘\(name)’ already exists on the phone. Rename your local file before uploading.")
+        }
+    }
+    public static func validatePhoneName(_ name: String) throws {
+        let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        if trimmed.isEmpty || trimmed == "." || trimmed == ".." ||
+            name.contains("/") || name.contains("\\") || name.contains("\0") || name.utf8.count > 240 {
+            throw TransferError(message: "Use a name under 240 bytes without slashes, null characters, or dot-only paths.")
         }
     }
     // Keep partial data beside the destination; publish only after a successful transfer.

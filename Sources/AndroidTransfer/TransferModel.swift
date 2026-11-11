@@ -129,6 +129,36 @@ final class TransferModel: ObservableObject {
         guard let entry = selected, entry.folder else { return }
         navigate(path + [Location(storage: entry.storage, parent: entry.object, name: entry.name)])
     }
+    func createFolder() {
+        guard connected, !busy, current.storage != 0 else { return }
+        let alert = NSAlert()
+        alert.messageText = "Create folder on phone"
+        alert.informativeText = "Enter a name for the new folder in \(current.name)."
+        alert.addButton(withTitle: "Create")
+        alert.addButton(withTitle: "Cancel")
+        let field = NSTextField(string: "New Folder")
+        field.frame = NSRect(x: 0, y: 0, width: 320, height: 24)
+        alert.accessoryView = field
+        alert.window.initialFirstResponder = field
+        guard alert.runModal() == .alertFirstButtonReturn else { return }
+        let name = field.stringValue
+        do {
+            try FileSafety.checkUpload(name: name, entries: entries)
+        } catch {
+            self.error = error.localizedDescription
+            return
+        }
+        let location = current
+        run("Creating \(name)…") {
+            var folderID: UInt32 = 0
+            try self.check(mtp_create_folder(self.session, location.storage, location.parent, name, &folderID))
+            let entries = try self.list(location)
+            DispatchQueue.main.async {
+                self.entries = entries
+                self.status = "Created folder \(name)."
+            }
+        }
+    }
     func disconnect() {
         run("Disconnecting…") {
             if let session = self.session { mtp_destroy(session); self.session = nil }
@@ -234,6 +264,7 @@ final class TransferModel: ObservableObject {
     }
     private func uploadNode(_ node: LocalUploadNode, storage: UInt32, parent: UInt32,
                             jobID: UUID, completed: inout UInt64, total: UInt64) throws {
+        try FileSafety.validatePhoneName(node.name)
         if let children = node.children {
             var folderID: UInt32 = 0
             try check(mtp_create_folder(session, storage, parent, node.name, &folderID))
