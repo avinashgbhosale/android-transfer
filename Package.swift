@@ -11,6 +11,6 @@ let package = Package(
         .target(name: "TransferCore"),
         .target(name: "WirelessCore", dependencies: ["TransferCore"], resources: [.copy("Resources/index.html")]),
         .executableTarget(name: "AndroidTransfer", dependencies: ["MTPBridge", "TransferCore", "WirelessCore"]),
-        .executableTarget(name: "WirelessChecks", dependencies: ["WirelessCore"], path: "WirelessChecks"),
+        .executableTarget(name: "WirelessChecks", dependencies: ["WirelessCore"], path: "WirelessChecks", exclude: ["integration.py"]),
         .executableTarget(name: "TransferChecks", dependencies: ["TransferCore", "MTPBridge"], path: "Checks")
     ])

@@ -2,6 +2,7 @@ import SwiftUI
 import AppKit
 import CoreImage.CIFilterBuiltins
 import WirelessCore
+import UniformTypeIdentifiers
 
 final class WirelessModel: ObservableObject {
     @Published var confirmStop = false
@@ -15,6 +16,7 @@ final class WirelessModel: ObservableObject {
     @Published var status = "Start sharing, then scan the QR code with your phone."
     @Published var files: [SharedFile] = []
     @Published var error: String?
+    @Published var dropTargeted = false
     private var server: WirelessServer?
     let folder = FileManager.default.urls(for: .downloadsDirectory, in: .userDomainMask)[0].appendingPathComponent("Android Transfer", isDirectory: true)
     var link: String { running && !address.isEmpty ? "http://\(address):\(port)/\(token)/" : "" }
@@ -66,6 +68,29 @@ final class WirelessModel: ObservableObject {
         guard panel.runModal() == .OK else { return }
         for url in panel.urls where !files.contains(where: { $0.url == url }) { files.append(SharedFile(url: url)) }
         server?.setFiles(files)
+    }
+    func addDroppedFiles(_ providers: [NSItemProvider]) -> Bool {
+        let group = DispatchGroup(), lock = NSLock()
+        var urls: [URL] = []
+        for provider in providers where provider.canLoadObject(ofClass: NSURL.self) {
+            group.enter()
+            provider.loadObject(ofClass: NSURL.self) { object, _ in
+                if let url = object as? URL { lock.lock(); urls.append(url); lock.unlock() }
+                group.leave()
+            }
+        }
+        group.notify(queue: .main) {
+            var rejected = 0
+            for url in urls {
+                let values = try? url.resourceValues(forKeys: [.isRegularFileKey])
+                if values?.isRegularFile == true {
+                    if !self.files.contains(where: { $0.url == url }) { self.files.append(SharedFile(url: url)) }
+                } else { rejected += 1 }
+            }
+            self.server?.setFiles(self.files)
+            if rejected > 0 { self.error = "Wireless sharing accepts files only; use USB to upload folders." }
+        }
+        return !providers.isEmpty
     }
     func remove(_ id: String) { files.removeAll { $0.id == id }; server?.setFiles(files) }
     func copyLink() { NSPasteboard.general.clearContents(); NSPasteboard.general.setString(link, forType: .string) }
@@ -120,7 +145,15 @@ struct WirelessView: View {
                         Spacer()
                         Button { model.remove(file.id) } label: { Image(systemName: "xmark.circle") }.buttonStyle(.plain).help("Stop sharing this file")
                     }.padding(.vertical, 5)
-                }.overlay { if model.files.isEmpty { Text("Only files you add appear on your phone.").foregroundStyle(.secondary).padding() } }
+                }.overlay {
+                    if model.dropTargeted {
+                        RoundedRectangle(cornerRadius: 10).fill(Color.accentColor.opacity(0.12))
+                        Text("Drop files to share").font(.headline).foregroundStyle(Color.accentColor)
+                    } else if model.files.isEmpty {
+                        Text("Add or drop files here. Only these files appear on your phone.").foregroundStyle(.secondary).padding()
+                    }
+                }
+                .onDrop(of: [UTType.fileURL], isTargeted: $model.dropTargeted, perform: model.addDroppedFiles)
                 Divider()
                 Text("Phone → Mac").font(.title2.bold())
                 Text("Choose files on the phone’s transfer page and tap Send selected files. Duplicate names get a numbered prefix.").foregroundStyle(.secondary)

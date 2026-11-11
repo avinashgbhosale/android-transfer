@@ -6,13 +6,16 @@ and the phone's browser. No Android app, account, cloud, or USB debugging is req
 This is a custom local app, not an
 Apple product or Apple-endorsed software.
 
+Version 1.2 adds Finder drag-and-drop, recursive USB folder uploads, and a
+per-item transfer queue with progress and failure details.
+
 ## Install and run the exported app
 
 End users need **macOS 26 or later** and a matching Mac architecture. The current
 export is **arm64 for Apple silicon (M-series Macs)**. Homebrew, Swift, Python,
 and Xcode are not needed to run the exported app; its USB libraries are bundled.
 
-1. Open `dist/Android-Transfer-1.1-arm64.dmg`.
+1. Open `dist/Android-Transfer-1.2-arm64.dmg`.
 2. Drag **Android Transfer.app** onto the **Applications** shortcut.
 3. Eject the disk image and open **Android Transfer** from Applications.
 4. Choose the **Wireless** or **USB cable** tab and follow the steps below.
@@ -72,7 +75,7 @@ To build the latest source and export a compressed disk image:
 This builds in a temporary directory, so it does not replace a running app.
 The DMG contains the app, an Applications shortcut, installation instructions,
 and documentation. Its filename includes the version and architecture, such as
-`dist/Android-Transfer-1.1-arm64.dmg`. A `.sha256` checksum is written beside it.
+`dist/Android-Transfer-1.2-arm64.dmg`. A `.sha256` checksum is written beside it.
 
 To package an existing, verified app without recompiling:
 
@@ -83,8 +86,8 @@ To package an existing, verified app without recompiling:
 Verify the exported image and checksum:
 
 ```sh
-hdiutil verify "dist/Android-Transfer-1.1-arm64.dmg"
-(cd dist && shasum -a 256 -c Android-Transfer-1.1-arm64.dmg.sha256)
+hdiutil verify "dist/Android-Transfer-1.2-arm64.dmg"
+(cd dist && shasum -a 256 -c Android-Transfer-1.2-arm64.dmg.sha256)
 ```
 
 For a ZIP of the app instead of a DMG, preserve the bundle with macOS `ditto`:
@@ -116,7 +119,8 @@ sources and license materials when distributing; see [THIRD-PARTY.md](THIRD-PART
    in `~/Downloads/Android Transfer`. Existing files are preserved with numbered
    prefixes for duplicate names.
 5. For Mac → phone, click **Add files to share…** on the Mac, then **Refresh files**
-   on the phone. Tap Download beside a file.
+   on the phone. Tap Download beside a file. You can also drag Mac files onto the
+   sharing list; wireless folder sharing is not supported yet.
 6. Click **Stop sharing** when finished. It invalidates the link and interrupts
    active transfers; incomplete incoming files are removed.
 
@@ -140,6 +144,8 @@ supported in wireless mode. Keep the app running and your Mac awake during trans
 3. Click **Connect phone**, select a storage location, and click **Open folder**.
 4. Navigate into folders the same way. Use the up arrow to return to a parent.
 5. **Upload to phone** opens a Mac file picker (multiple files supported).
+   Files and complete folders are accepted. You can also drag files or folders
+   from Finder onto the phone file table. Transfers run sequentially in the queue.
 6. Select a phone file and click **Download to Mac** to choose a destination.
 7. Wait for completion and click **Disconnect** before unplugging.
 
@@ -151,8 +157,10 @@ Mac save dialog. Uploads reject existing names, including case-only differences.
 ## Current scope
 
 - One phone at a time; internal storage and SD storage exposed through MTP.
-- Folder browsing, current-folder search, individual downloads, batch file uploads.
-- No recursive folder transfers, delete, rename, resume, or cancellation yet.
+- Folder browsing, current-folder search, individual downloads, batch uploads,
+  recursive folder uploads, Finder drag-and-drop, and a visible transfer queue.
+- Hidden files inside uploaded folders are skipped. Symbolic links are rejected.
+- No recursive folder downloads, delete, rename, resume, or cancellation yet.
 - Keep the phone connected during transfers. A failed upload may leave an
   incomplete file on Android; inspect/remove it using the phone before retrying.
 - Android protected app folders may not be accessible through MTP.

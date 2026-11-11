@@ -1,6 +1,7 @@
 import SwiftUI
 import AppKit
 import TransferCore
+import UniformTypeIdentifiers
 
 final class AppDelegate: NSObject, NSApplicationDelegate {
     weak var model: TransferModel?
@@ -106,7 +107,42 @@ struct ContentView: View {
                                 .foregroundStyle(.secondary)
                         }.width(min: 90, ideal: 120)
                     }.disabled(model.busy)
+                        .overlay {
+                            if model.dropTargeted {
+                                RoundedRectangle(cornerRadius: 12).fill(Color.accentColor.opacity(0.12))
+                                VStack(spacing: 8) {
+                                    Image(systemName: "arrow.down.doc").font(.system(size: 34))
+                                    Text("Drop files or folders to upload").font(.headline)
+                                }.foregroundStyle(Color.accentColor)
+                            }
+                        }
+                        .onDrop(of: [UTType.fileURL], isTargeted: $model.dropTargeted,
+                                perform: model.enqueueDroppedItems)
                     if model.filtered.isEmpty && !model.busy { Text(model.search.isEmpty ? "This folder is empty." : "No matching files.").foregroundStyle(.secondary) }
+                }
+                if model.hasTransfers {
+                    VStack(spacing: 8) {
+                        HStack {
+                            Text("Transfer queue").font(.headline)
+                            Spacer()
+                            Button("Clear finished", action: model.clearFinishedJobs).disabled(model.busy)
+                        }
+                        ScrollView {
+                            LazyVStack(spacing: 8) {
+                                ForEach(model.jobs) { job in
+                                    HStack(spacing: 10) {
+                                        Image(systemName: job.state == .completed ? "checkmark.circle.fill" : job.state == .failed ? "exclamationmark.triangle.fill" : "arrow.left.arrow.right.circle")
+                                            .foregroundStyle(job.state == .completed ? .green : job.state == .failed ? .orange : Color.accentColor)
+                                        VStack(alignment: .leading, spacing: 3) {
+                                            HStack { Text(job.name).lineLimit(1); Spacer(); Text(job.state.rawValue).font(.caption).foregroundStyle(.secondary) }
+                                            ProgressView(value: job.progress)
+                                            Text("\(job.direction) · \(job.detail)").font(.caption).foregroundStyle(.secondary).lineLimit(2)
+                                        }
+                                    }.padding(8).background(.quaternary.opacity(0.35), in: RoundedRectangle(cornerRadius: 8))
+                                }
+                            }
+                        }.frame(maxHeight: 170)
+                    }
                 }
                 if let error = model.error {
                     Label(error, systemImage: "exclamationmark.triangle.fill").foregroundStyle(.orange)

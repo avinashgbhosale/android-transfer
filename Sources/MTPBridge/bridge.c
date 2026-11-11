@@ -62,3 +62,15 @@ int mtp_upload(MTPSession *s, uint32_t storage, uint32_t parent, const char *pat
     if(result) return fail(s, "Upload failed. The phone may contain an incomplete file; inspect it before retrying");
     return 0;
 }
+int mtp_create_folder(MTPSession *s, uint32_t storage, uint32_t parent, const char *name, uint32_t *folder_id) {
+    if(!s->device) return fail(s, "Connect your phone first.");
+    if(!name || !folder_id) return fail(s, "Invalid folder request.");
+    LIBMTP_Clear_Errorstack(s->device);
+    char *copy = strdup(name);
+    if(!copy) return fail(s, "Not enough memory.");
+    uint32_t id = LIBMTP_Create_Folder(s->device, copy, parent == 0xffffffff ? 0 : parent, storage);
+    free(copy);
+    if(id == 0) return fail(s, "Could not create folder on the phone");
+    *folder_id = id;
+    return 0;
+}

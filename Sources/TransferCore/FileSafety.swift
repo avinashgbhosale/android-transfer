@@ -40,3 +40,35 @@ public enum FileSafety {
         }
     }
 }
+
+public struct LocalUploadNode: Sendable {
+    public let url: URL
+    public let name: String
+    public let size: UInt64
+    public let children: [LocalUploadNode]?
+    public var isDirectory: Bool { children != nil }
+    public var fileCount: Int { children?.reduce(0) { $0 + $1.fileCount } ?? 1 }
+}
+
+public enum UploadScanner {
+    public static func scan(_ url: URL) throws -> LocalUploadNode {
+        let keys: Set<URLResourceKey> = [.isRegularFileKey, .isDirectoryKey, .isSymbolicLinkKey, .fileSizeKey]
+        let values = try url.resourceValues(forKeys: keys)
+        if values.isSymbolicLink == true {
+            throw TransferError(message: "Symbolic links are not transferred: \(url.lastPathComponent)")
+        }
+        if values.isRegularFile == true {
+            return LocalUploadNode(url: url, name: url.lastPathComponent,
+                                   size: UInt64(max(0, values.fileSize ?? 0)), children: nil)
+        }
+        if values.isDirectory == true {
+            let urls = try FileManager.default.contentsOfDirectory(
+                at: url, includingPropertiesForKeys: Array(keys), options: [.skipsHiddenFiles])
+                .sorted { $0.lastPathComponent.localizedStandardCompare($1.lastPathComponent) == .orderedAscending }
+            let children = try urls.map(scan)
+            return LocalUploadNode(url: url, name: url.lastPathComponent,
+                                   size: children.reduce(0) { $0 + $1.size }, children: children)
+        }
+        throw TransferError(message: "Only regular files and folders can be transferred: \(url.lastPathComponent)")
+    }
+}
