@@ -159,6 +159,37 @@ final class TransferModel: ObservableObject {
             }
         }
     }
+    func renameSelected() {
+        guard connected, !busy, current.storage != 0, let entry = selected else { return }
+        let alert = NSAlert()
+        alert.messageText = "Rename \(entry.folder ? "folder" : "file")"
+        alert.informativeText = "Enter a new name for \(entry.name)."
+        alert.addButton(withTitle: "Rename")
+        alert.addButton(withTitle: "Cancel")
+        let field = NSTextField(string: entry.name)
+        field.frame = NSRect(x: 0, y: 0, width: 320, height: 24)
+        alert.accessoryView = field
+        alert.window.initialFirstResponder = field
+        guard alert.runModal() == .alertFirstButtonReturn else { return }
+        let name = field.stringValue
+        if name == entry.name { return }
+        do {
+            try FileSafety.checkUpload(name: name, entries: entries.filter { $0.id != entry.id })
+        } catch {
+            self.error = error.localizedDescription
+            return
+        }
+        let location = current
+        run("Renaming \(entry.name)…") {
+            try self.check(mtp_rename(self.session, entry.object, name))
+            let entries = try self.list(location)
+            DispatchQueue.main.async {
+                self.entries = entries
+                self.selection = entries.first(where: { $0.object == entry.object })?.id
+                self.status = "Renamed \(entry.name) to \(name)."
+            }
+        }
+    }
     func disconnect() {
         run("Disconnecting…") {
             if let session = self.session { mtp_destroy(session); self.session = nil }

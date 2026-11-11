@@ -74,3 +74,14 @@ int mtp_create_folder(MTPSession *s, uint32_t storage, uint32_t parent, const ch
     *folder_id = id;
     return 0;
 }
+int mtp_rename(MTPSession *s, uint32_t id, const char *name) {
+    if(!s->device) return fail(s, "Connect your phone first.");
+    if(!name) return fail(s, "Invalid rename request.");
+    LIBMTP_Clear_Errorstack(s->device);
+    char *copy = strdup(name);
+    if(!copy) return fail(s, "Not enough memory.");
+    int result = LIBMTP_Set_Object_Filename(s->device, id, copy);
+    free(copy);
+    if(result != 0) return fail(s, "Could not rename item on the phone");
+    return 0;
+}

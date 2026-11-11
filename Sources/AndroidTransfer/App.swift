@@ -87,6 +87,8 @@ struct ContentView: View {
                         .disabled(model.busy || !model.connected || model.current.storage == 0)
                     Button(action: model.createFolder) { Label("New folder", systemImage: "folder.badge.plus") }
                         .disabled(model.busy || !model.connected || model.current.storage == 0)
+                    Button(action: model.renameSelected) { Label("Rename", systemImage: "pencil") }
+                        .disabled(model.busy || model.current.storage == 0 || model.selected == nil)
                     Button(action: model.download) { Label("Download to Mac", systemImage: "arrow.down.doc") }
                         .disabled(model.busy || model.selected == nil || model.selected?.folder == true)
                     Button("Open folder", action: model.openSelected).disabled(model.busy || model.selected?.folder != true)

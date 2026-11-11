@@ -49,6 +49,7 @@ check(mtp_download(session, 1, -1, nil, nil) == -1, "download without phone")
 check(mtp_upload(session, 1, 0, "/missing", "missing", nil, nil) == -1, "upload without phone")
 var folderID: UInt32 = 0
 check(mtp_create_folder(session, 1, 0, "Folder", &folderID) == -1, "create folder without phone")
+check(mtp_rename(session, 1, "Renamed") == -1, "rename without phone")
 
 let scanRoot = directory.appendingPathComponent("Upload Folder")
 let nested = scanRoot.appendingPathComponent("Nested")
