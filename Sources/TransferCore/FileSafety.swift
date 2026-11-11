@@ -9,6 +9,18 @@ public final class TransferCancellation: @unchecked Sendable {
     public func reset() { lock.withLock { value = false } }
 }
 
+public enum TransferMetrics {
+    public static func summary(bytes: UInt64, total: UInt64, elapsed: TimeInterval) -> String {
+        guard elapsed > 0, bytes > 0 else { return "Calculating speed…" }
+        let speed = Double(bytes) / elapsed
+        let speedText = ByteCountFormatter.string(fromByteCount: Int64(min(speed, Double(Int64.max))), countStyle: .file) + "/s"
+        guard total > bytes, speed > 0 else { return speedText }
+        let seconds = Int(ceil(Double(total - bytes) / speed))
+        if seconds < 60 { return "\(speedText) · \(seconds)s left" }
+        return "\(speedText) · \(Int(ceil(Double(seconds) / 60)))m left"
+    }
+}
+
 public struct PhoneEntry: Identifiable, Hashable {
     public let object: UInt32
     public let storage: UInt32

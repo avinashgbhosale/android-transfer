@@ -149,7 +149,8 @@ supported in wireless mode. Keep the app running and your Mac awake during trans
 5. **Upload to phone** opens a Mac file picker (multiple files supported).
    Files and complete folders are accepted. You can also drag files or folders
    from Finder onto the phone file table. Transfers run sequentially in the queue,
-   where **Cancel transfers** stops the active operation and skips queued uploads.
+   which shows progress, transfer speed, estimated time remaining, and results.
+   **Cancel transfers** stops the active operation and skips queued uploads.
 6. Select a phone file or folder and click **Download to Mac** to choose a destination.
    Folders are downloaded recursively and published only after every file succeeds.
 7. Wait for completion and click **Disconnect** before unplugging.

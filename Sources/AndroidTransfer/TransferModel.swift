@@ -45,10 +45,10 @@ private let entryCallback: MTPEntryCallback = { object, storage, name, size, fol
         PhoneEntry(object: object, storage: storage, name: String(cString: name), size: size, folder: folder != 0))
 }
 private final class ProgressSink {
-    let update: (Double) -> Void
+    let update: (Double, UInt64, UInt64) -> Void
     let cancellation: TransferCancellation?
     var last = Date.distantPast
-    init(cancellation: TransferCancellation? = nil, _ update: @escaping (Double) -> Void) {
+    init(cancellation: TransferCancellation? = nil, _ update: @escaping (Double, UInt64, UInt64) -> Void) {
         self.cancellation = cancellation
         self.update = update
     }
@@ -58,7 +58,7 @@ private let progressCallback: MTPProgressCallback = { done, total, context in
     let sink = Unmanaged<ProgressSink>.fromOpaque(context).takeUnretainedValue()
     if Date().timeIntervalSince(sink.last) > 0.08 || done == total {
         sink.last = Date()
-        sink.update(total == 0 ? 0 : min(1, Double(done) / Double(total)))
+        sink.update(total == 0 ? 0 : min(1, Double(done) / Double(total)), done, total)
     }
     return sink.cancellation?.isCancelled == true ? 1 : 0
 }
@@ -263,9 +263,12 @@ final class TransferModel: ObservableObject {
         run("Downloading \(entry.name)…", transfer: true) {
             do {
                 self.updateJob(jobID, state: .transferring)
-                let sink = ProgressSink(cancellation: self.cancellation) { value in
+                let started = Date()
+                let sink = ProgressSink(cancellation: self.cancellation) { value, done, total in
                     DispatchQueue.main.async { self.progress = value }
-                    self.updateJob(jobID, progress: value)
+                    self.updateJob(jobID, progress: value,
+                                   detail: TransferMetrics.summary(bytes: done, total: total,
+                                                                   elapsed: Date().timeIntervalSince(started)))
                 }
                 try FileSafety.download(to: destination) { fd in
                     try self.check(mtp_download(self.session, entry.object, fd, progressCallback, Unmanaged.passUnretained(sink).toOpaque()))
@@ -304,10 +307,11 @@ final class TransferModel: ObservableObject {
                 self.updateJob(jobID, state: .transferring,
                                detail: "\(tree.fileCount) file(s)")
                 var completed: UInt64 = 0
+                let started = Date()
                 try FileSafety.downloadDirectory(to: destination) { temporary in
                     for child in tree.children ?? [] {
                         try self.downloadRemote(child, into: temporary, jobID: jobID,
-                                                completed: &completed, total: tree.size)
+                                                completed: &completed, total: tree.size, started: started)
                     }
                 }
                 self.updateJob(jobID, state: .completed, progress: 1,
@@ -334,7 +338,7 @@ final class TransferModel: ObservableObject {
         return RemoteDownloadNode(entry: entry, children: children)
     }
     private func downloadRemote(_ node: RemoteDownloadNode, into directory: URL, jobID: UUID,
-                                completed: inout UInt64, total: UInt64) throws {
+                                completed: inout UInt64, total: UInt64, started: Date) throws {
         try throwIfCancelled()
         let destination = directory.appendingPathComponent(FileSafety.safeName(node.entry.name),
                                                             isDirectory: node.entry.folder)
@@ -342,15 +346,17 @@ final class TransferModel: ObservableObject {
             try FileManager.default.createDirectory(at: destination, withIntermediateDirectories: false)
             for child in children {
                 try downloadRemote(child, into: destination, jobID: jobID,
-                                   completed: &completed, total: total)
+                                   completed: &completed, total: total, started: started)
             }
             return
         }
         let alreadyCompleted = completed
-        let sink = ProgressSink(cancellation: cancellation) { value in
+        let sink = ProgressSink(cancellation: cancellation) { value, done, _ in
             let aggregate = total == 0 ? 0 : (Double(alreadyCompleted) + value * Double(node.size)) / Double(total)
+            let aggregateBytes = alreadyCompleted + min(done, node.size)
             DispatchQueue.main.async { self.progress = aggregate }
-            self.updateJob(jobID, progress: aggregate, detail: "Downloading \(node.entry.name)")
+            self.updateJob(jobID, progress: aggregate,
+                           detail: "\(node.entry.name) · \(TransferMetrics.summary(bytes: aggregateBytes, total: total, elapsed: Date().timeIntervalSince(started)))")
         }
         try FileSafety.download(to: destination) { fd in
             try check(mtp_download(session, node.entry.object, fd, progressCallback,
@@ -412,8 +418,9 @@ final class TransferModel: ObservableObject {
                         self.status = "Uploading \(index + 1)/\(urls.count): \(node.name)…"; self.progress = 0
                     }
                     var completed: UInt64 = 0
+                    let started = Date()
                     try self.uploadNode(node, storage: location.storage, parent: location.parent,
-                                        jobID: job.id, completed: &completed, total: node.size)
+                                        jobID: job.id, completed: &completed, total: node.size, started: started)
                     self.updateJob(job.id, state: .completed, progress: 1,
                                    detail: node.isDirectory ? "\(count) file(s) uploaded" : "Uploaded")
                 } catch {
@@ -438,7 +445,7 @@ final class TransferModel: ObservableObject {
         }
     }
     private func uploadNode(_ node: LocalUploadNode, storage: UInt32, parent: UInt32,
-                            jobID: UUID, completed: inout UInt64, total: UInt64) throws {
+                            jobID: UUID, completed: inout UInt64, total: UInt64, started: Date) throws {
         try throwIfCancelled()
         try FileSafety.validatePhoneName(node.name)
         if let children = node.children {
@@ -446,16 +453,18 @@ final class TransferModel: ObservableObject {
             try check(mtp_create_folder(session, storage, parent, node.name, &folderID))
             for child in children {
                 try uploadNode(child, storage: storage, parent: folderID, jobID: jobID,
-                               completed: &completed, total: total)
+                               completed: &completed, total: total, started: started)
             }
             if total == 0 { updateJob(jobID, progress: 1) }
             return
         }
         let alreadyCompleted = completed
-        let sink = ProgressSink(cancellation: cancellation) { value in
+        let sink = ProgressSink(cancellation: cancellation) { value, done, _ in
             let aggregate = total == 0 ? 1 : (Double(alreadyCompleted) + value * Double(node.size)) / Double(total)
+            let aggregateBytes = alreadyCompleted + min(done, node.size)
             DispatchQueue.main.async { self.progress = aggregate }
-            self.updateJob(jobID, progress: aggregate, detail: "Uploading \(node.name)")
+            self.updateJob(jobID, progress: aggregate,
+                           detail: "\(node.name) · \(TransferMetrics.summary(bytes: aggregateBytes, total: total, elapsed: Date().timeIntervalSince(started)))")
         }
         try check(mtp_upload(session, storage, parent, node.url.path, node.name,
                              progressCallback, Unmanaged.passUnretained(sink).toOpaque()))
