@@ -1,0 +1,42 @@
+import Foundation
+
+public struct PhoneEntry: Identifiable, Hashable {
+    public let object: UInt32
+    public let storage: UInt32
+    public let name: String
+    public let size: UInt64
+    public let folder: Bool
+    public init(object: UInt32, storage: UInt32, name: String, size: UInt64, folder: Bool) {
+        self.object = object; self.storage = storage; self.name = name; self.size = size; self.folder = folder
+    }
+    public var id: String { "\(storage):\(object)" }
+}
+public struct TransferError: LocalizedError {
+    public let message: String
+    public init(message: String) { self.message = message }
+    public var errorDescription: String? { message }
+}
+public enum FileSafety {
+    public static func safeName(_ name: String) -> String {
+        let last = name.replacingOccurrences(of: "\\", with: "/").split(separator: "/").last.map(String.init) ?? "Download"
+        return last == "." || last == ".." ? "Download" : last
+    }
+    public static func checkUpload(name: String, entries: [PhoneEntry]) throws {
+        if entries.contains(where: { $0.name.caseInsensitiveCompare(name) == .orderedSame }) {
+            throw TransferError(message: "A file or folder named ‘\(name)’ already exists on the phone. Rename your local file before uploading.")
+        }
+    }
+    // Keep partial data beside the destination; publish only after a successful transfer.
+    public static func download(to destination: URL, write: (Int32) throws -> Void) throws {
+        var template = Array(destination.deletingLastPathComponent().appendingPathComponent(".android-transfer-XXXXXX").path.utf8CString)
+        let fd = mkstemp(&template)
+        guard fd >= 0 else { throw TransferError(message: "Cannot create a temporary download in this folder.") }
+        let temporary = String(cString: template)
+        defer { close(fd); unlink(temporary) }
+        try write(fd)
+        guard fsync(fd) == 0 else { throw TransferError(message: "Could not finish saving the file. Check available disk space.") }
+        guard rename(temporary, destination.path) == 0 else {
+            throw TransferError(message: "Cannot save the completed download: \(String(cString: strerror(errno)))")
+        }
+    }
+}
