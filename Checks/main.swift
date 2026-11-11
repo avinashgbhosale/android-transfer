@@ -66,4 +66,21 @@ check(tree.children?.map(\.name) == ["Nested", "one.txt"], "stable folder orderi
 let link = directory.appendingPathComponent("unsafe-link")
 try FileManager.default.createSymbolicLink(at: link, withDestinationURL: destination)
 expectFailure("symbolic-link rejection") { _ = try UploadScanner.scan(link) }
+
+let downloadedFolder = directory.appendingPathComponent("Downloaded Folder")
+expectFailure("failed folder download") {
+    try FileSafety.downloadDirectory(to: downloadedFolder) { temporary in
+        try Data("partial".utf8).write(to: temporary.appendingPathComponent("partial.txt"))
+        throw TransferError(message: "Phone disconnected")
+    }
+}
+check(!FileManager.default.fileExists(atPath: downloadedFolder.path), "failed folder is not published")
+check(try FileManager.default.contentsOfDirectory(atPath: directory.path).allSatisfy { !$0.hasPrefix(".android-transfer-folder-") }, "folder temporary cleanup")
+try FileSafety.downloadDirectory(to: downloadedFolder) { temporary in
+    try Data("complete".utf8).write(to: temporary.appendingPathComponent("complete.txt"))
+}
+check(try String(contentsOf: downloadedFolder.appendingPathComponent("complete.txt"), encoding: .utf8) == "complete", "completed folder publication")
+expectFailure("existing folder preservation") {
+    try FileSafety.downloadDirectory(to: downloadedFolder) { _ in }
+}
 print("Passed \(count) checks.")

@@ -47,6 +47,21 @@ public enum FileSafety {
             throw TransferError(message: "Cannot save the completed download: \(String(cString: strerror(errno)))")
         }
     }
+    public static func downloadDirectory(to destination: URL, write: (URL) throws -> Void) throws {
+        if FileManager.default.fileExists(atPath: destination.path) {
+            throw TransferError(message: "A file or folder named ‘\(destination.lastPathComponent)’ already exists on this Mac.")
+        }
+        let temporary = destination.deletingLastPathComponent()
+            .appendingPathComponent(".android-transfer-folder-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: temporary, withIntermediateDirectories: false)
+        defer { try? FileManager.default.removeItem(at: temporary) }
+        try write(temporary)
+        do {
+            try FileManager.default.moveItem(at: temporary, to: destination)
+        } catch {
+            throw TransferError(message: "Cannot publish the completed folder: \(error.localizedDescription)")
+        }
+    }
 }
 
 public struct LocalUploadNode: Sendable {

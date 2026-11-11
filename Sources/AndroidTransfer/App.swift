@@ -92,7 +92,7 @@ struct ContentView: View {
                     Button(role: .destructive, action: model.deleteSelected) { Label("Delete", systemImage: "trash") }
                         .disabled(model.busy || model.current.storage == 0 || model.selected == nil)
                     Button(action: model.download) { Label("Download to Mac", systemImage: "arrow.down.doc") }
-                        .disabled(model.busy || model.selected == nil || model.selected?.folder == true)
+                        .disabled(model.busy || model.selected == nil)
                     Button("Open folder", action: model.openSelected).disabled(model.busy || model.selected?.folder != true)
                 }
                 TextField("Search this folder", text: $model.search).textFieldStyle(.roundedBorder)

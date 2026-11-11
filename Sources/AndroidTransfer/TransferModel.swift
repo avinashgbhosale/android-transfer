@@ -25,6 +25,18 @@ struct TransferJob: Identifiable {
     var progress: Double
     var state: TransferJobState
 }
+private final class RemoteDownloadNode {
+    let entry: PhoneEntry
+    let children: [RemoteDownloadNode]?
+    let size: UInt64
+    let fileCount: Int
+    init(entry: PhoneEntry, children: [RemoteDownloadNode]? = nil) {
+        self.entry = entry
+        self.children = children
+        self.size = children?.reduce(0) { $0 + $1.size } ?? entry.size
+        self.fileCount = children?.reduce(0) { $0 + $1.fileCount } ?? 1
+    }
+}
 private final class EntryCollector { var entries: [PhoneEntry] = [] }
 private let entryCallback: MTPEntryCallback = { object, storage, name, size, folder, context in
     guard let context, let name else { return }
@@ -223,7 +235,8 @@ final class TransferModel: ObservableObject {
         }
     }
     func download() {
-        guard !busy, let entry = selected, !entry.folder else { return }
+        guard !busy, let entry = selected else { return }
+        if entry.folder { downloadFolder(entry); return }
         let panel = NSSavePanel()
         panel.title = "Download to Mac"; panel.nameFieldStringValue = FileSafety.safeName(entry.name)
         guard panel.runModal() == .OK, let destination = panel.url else { return }
@@ -247,6 +260,74 @@ final class TransferModel: ObservableObject {
                 throw error
             }
         }
+    }
+    private func downloadFolder(_ entry: PhoneEntry) {
+        let panel = NSOpenPanel()
+        panel.title = "Choose where to save \(entry.name)"
+        panel.prompt = "Choose Folder"
+        panel.canChooseFiles = false
+        panel.canChooseDirectories = true
+        panel.canCreateDirectories = true
+        panel.allowsMultipleSelection = false
+        guard panel.runModal() == .OK, let parent = panel.url else { return }
+        let destination = parent.appendingPathComponent(FileSafety.safeName(entry.name), isDirectory: true)
+        let jobID = UUID()
+        jobs.append(TransferJob(id: jobID, name: entry.name, direction: "Phone → Mac",
+                                detail: "Scanning folder", progress: 0, state: .queued))
+        run("Scanning \(entry.name)…", transfer: true) {
+            do {
+                self.updateJob(jobID, state: .preparing)
+                let tree = try self.scanRemote(entry)
+                self.updateJob(jobID, state: .transferring,
+                               detail: "\(tree.fileCount) file(s)")
+                var completed: UInt64 = 0
+                try FileSafety.downloadDirectory(to: destination) { temporary in
+                    for child in tree.children ?? [] {
+                        try self.downloadRemote(child, into: temporary, jobID: jobID,
+                                                completed: &completed, total: tree.size)
+                    }
+                }
+                self.updateJob(jobID, state: .completed, progress: 1,
+                               detail: "\(tree.fileCount) file(s) saved")
+                DispatchQueue.main.async {
+                    self.status = "Saved folder \(entry.name) to \(parent.lastPathComponent)."
+                }
+            } catch {
+                self.updateJob(jobID, state: .failed, detail: error.localizedDescription)
+                throw error
+            }
+        }
+    }
+    private func scanRemote(_ entry: PhoneEntry) throws -> RemoteDownloadNode {
+        guard entry.folder else { return RemoteDownloadNode(entry: entry) }
+        let children = try list(Location(storage: entry.storage, parent: entry.object, name: entry.name))
+            .map(scanRemote)
+        return RemoteDownloadNode(entry: entry, children: children)
+    }
+    private func downloadRemote(_ node: RemoteDownloadNode, into directory: URL, jobID: UUID,
+                                completed: inout UInt64, total: UInt64) throws {
+        let destination = directory.appendingPathComponent(FileSafety.safeName(node.entry.name),
+                                                            isDirectory: node.entry.folder)
+        if let children = node.children {
+            try FileManager.default.createDirectory(at: destination, withIntermediateDirectories: false)
+            for child in children {
+                try downloadRemote(child, into: destination, jobID: jobID,
+                                   completed: &completed, total: total)
+            }
+            return
+        }
+        let alreadyCompleted = completed
+        let sink = ProgressSink { value in
+            let aggregate = total == 0 ? 0 : (Double(alreadyCompleted) + value * Double(node.size)) / Double(total)
+            DispatchQueue.main.async { self.progress = aggregate }
+            self.updateJob(jobID, progress: aggregate, detail: "Downloading \(node.entry.name)")
+        }
+        try FileSafety.download(to: destination) { fd in
+            try check(mtp_download(session, node.entry.object, fd, progressCallback,
+                                   Unmanaged.passUnretained(sink).toOpaque()))
+        }
+        completed += node.size
+        updateJob(jobID, progress: total == 0 ? 0 : Double(completed) / Double(total))
     }
     func upload() {
         guard !busy, connected, current.storage != 0 else { return }
