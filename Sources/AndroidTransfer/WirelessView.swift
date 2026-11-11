@@ -41,7 +41,11 @@ final class WirelessModel: ObservableObject {
             self.status = "Ready. Scan the QR code on your phone."
         } }
         server.onStatus = { [weak self, weak server] message in DispatchQueue.main.async {
-            guard let self, let server, self.server === server, !self.stopping else { return }; self.status = message
+            guard let self, let server, self.server === server, !self.stopping else { return }
+            self.status = message
+            if message.hasPrefix("Received ") || message.hasPrefix("Sent ") {
+                TransferNotifications.shared.send(title: "Wireless transfer complete", body: message)
+            }
         } }
         server.onFailure = { [weak self, weak server] message in DispatchQueue.main.async {
             guard let self, let server, self.server === server, !self.stopping else { return }
@@ -102,6 +106,7 @@ final class WirelessModel: ObservableObject {
 
 struct WirelessView: View {
     @ObservedObject var model: WirelessModel
+    @ObservedObject private var notifications = TransferNotifications.shared
     var body: some View {
         HStack(alignment: .top, spacing: 32) {
             VStack(alignment: .leading, spacing: 16) {
@@ -132,6 +137,10 @@ struct WirelessView: View {
                 }
                 Text("Use a trusted Wi-Fi network. Transfers use local HTTP, and anyone with the link can access the shared files while sharing is on.")
                     .font(.caption).foregroundStyle(.secondary)
+                Button(action: notifications.toggle) {
+                    Label(notifications.enabled ? "Notifications on" : "Enable notifications",
+                          systemImage: notifications.enabled ? "bell.fill" : "bell")
+                }
             }.frame(width: 310)
             Divider()
             VStack(alignment: .leading, spacing: 16) {

@@ -274,6 +274,7 @@ final class TransferModel: ObservableObject {
                     try self.check(mtp_download(self.session, entry.object, fd, progressCallback, Unmanaged.passUnretained(sink).toOpaque()))
                 }
                 self.updateJob(jobID, state: .completed, progress: 1, detail: destination.path)
+                TransferNotifications.shared.send(title: "Download complete", body: entry.name)
                 DispatchQueue.main.async { self.status = "Saved \(entry.name) to \(destination.deletingLastPathComponent().lastPathComponent)." }
             } catch {
                 if self.cancellation.isCancelled {
@@ -316,6 +317,7 @@ final class TransferModel: ObservableObject {
                 }
                 self.updateJob(jobID, state: .completed, progress: 1,
                                detail: "\(tree.fileCount) file(s) saved")
+                TransferNotifications.shared.send(title: "Folder download complete", body: entry.name)
                 DispatchQueue.main.async {
                     self.status = "Saved folder \(entry.name) to \(parent.lastPathComponent)."
                 }
@@ -441,6 +443,11 @@ final class TransferModel: ObservableObject {
                 self.entries = entries
                 self.status = wasCancelled ? "Upload queue cancelled." : failures == 0 ? "Uploaded \(urls.count) item(s)." : "Finished with \(failures) failed item(s)."
                 if failures > 0 { self.error = "Some items failed. Review the transfer queue for details." }
+            }
+            if !wasCancelled {
+                TransferNotifications.shared.send(
+                    title: failures == 0 ? "Upload complete" : "Upload finished with errors",
+                    body: failures == 0 ? "Uploaded \(urls.count) item(s)" : "\(failures) item(s) failed")
             }
         }
     }

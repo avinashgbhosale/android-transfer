@@ -9,6 +9,9 @@ Apple product or Apple-endorsed software.
 Version 1.2 adds Finder drag-and-drop, recursive USB folder uploads, and a
 per-item transfer queue with progress and failure details.
 
+Completion notifications are opt-in. Click **Enable notifications** in either tab
+and approve the macOS prompt; the app does not request permission automatically.
+
 ## Install and run the exported app
 
 End users need **macOS 26 or later** and a matching Mac architecture. The current

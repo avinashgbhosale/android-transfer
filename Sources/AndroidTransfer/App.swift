@@ -52,6 +52,7 @@ struct AndroidTransferApp: App {
 }
 struct ContentView: View {
     @ObservedObject var model: TransferModel
+    @ObservedObject private var notifications = TransferNotifications.shared
     var body: some View {
         HStack(spacing: 0) {
             VStack(alignment: .leading, spacing: 22) {
@@ -67,6 +68,10 @@ struct ContentView: View {
                     .buttonStyle(.borderedProminent).disabled(model.busy)
                 Spacer()
                 Text("Files travel directly over USB.\nNo account or cloud upload.").font(.caption).foregroundStyle(.secondary)
+                Button(action: notifications.toggle) {
+                    Label(notifications.enabled ? "Notifications on" : "Enable notifications",
+                          systemImage: notifications.enabled ? "bell.fill" : "bell")
+                }
                 if model.connected { Button("Disconnect", action: model.disconnect).disabled(model.busy) }
             }.padding(24).frame(width: 230).frame(maxHeight: .infinity).background(.quaternary.opacity(0.4))
             Divider()
