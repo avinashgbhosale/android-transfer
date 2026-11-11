@@ -6,8 +6,9 @@ and the phone's browser. No Android app, account, cloud, or USB debugging is req
 This is a custom local app, not an
 Apple product or Apple-endorsed software.
 
-Version 1.2 adds Finder drag-and-drop, recursive USB folder uploads, and a
-per-item transfer queue with progress and failure details.
+Version 1.3 adds Finder drag-and-drop, recursive USB folder uploads and downloads,
+create/rename/delete actions, cancellation, live speed and ETA, opt-in completion
+notifications, and a per-item transfer queue with progress and failure details.
 
 Completion notifications are opt-in. Click **Enable notifications** in either tab
 and approve the macOS prompt; the app does not request permission automatically.
@@ -18,7 +19,7 @@ End users need **macOS 26 or later** and a matching Mac architecture. The curren
 export is **arm64 for Apple silicon (M-series Macs)**. Homebrew, Swift, Python,
 and Xcode are not needed to run the exported app; its USB libraries are bundled.
 
-1. Open `dist/Android-Transfer-1.2-arm64.dmg`.
+1. Open `dist/Android-Transfer-1.3-arm64.dmg`.
 2. Drag **Android Transfer.app** onto the **Applications** shortcut.
 3. Eject the disk image and open **Android Transfer** from Applications.
 4. Choose the **Wireless** or **USB cable** tab and follow the steps below.
@@ -78,7 +79,7 @@ To build the latest source and export a compressed disk image:
 This builds in a temporary directory, so it does not replace a running app.
 The DMG contains the app, an Applications shortcut, installation instructions,
 and documentation. Its filename includes the version and architecture, such as
-`dist/Android-Transfer-1.2-arm64.dmg`. A `.sha256` checksum is written beside it.
+`dist/Android-Transfer-1.3-arm64.dmg`. A `.sha256` checksum is written beside it.
 
 To package an existing, verified app without recompiling:
 
@@ -89,8 +90,8 @@ To package an existing, verified app without recompiling:
 Verify the exported image and checksum:
 
 ```sh
-hdiutil verify "dist/Android-Transfer-1.2-arm64.dmg"
-(cd dist && shasum -a 256 -c Android-Transfer-1.2-arm64.dmg.sha256)
+hdiutil verify "dist/Android-Transfer-1.3-arm64.dmg"
+(cd dist && shasum -a 256 -c Android-Transfer-1.3-arm64.dmg.sha256)
 ```
 
 For a ZIP of the app instead of a DMG, preserve the bundle with macOS `ditto`:
