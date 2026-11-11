@@ -144,7 +144,8 @@ supported in wireless mode. Keep the app running and your Mac awake during trans
 3. Click **Connect phone**, select a storage location, and click **Open folder**.
 4. Navigate into folders the same way. Use the up arrow to return to a parent.
    Use **New folder** to create a directory in the current phone location. Select
-   a file or folder and click **Rename** to change its name.
+   a file or folder and click **Rename** to change its name. **Delete** permanently
+   removes the selected item after confirmation; Android MTP has no Trash recovery.
 5. **Upload to phone** opens a Mac file picker (multiple files supported).
    Files and complete folders are accepted. You can also drag files or folders
    from Finder onto the phone file table. Transfers run sequentially in the queue.
@@ -162,7 +163,7 @@ Mac save dialog. Uploads reject existing names, including case-only differences.
 - Folder browsing, current-folder search, individual downloads, batch uploads,
   recursive folder uploads, Finder drag-and-drop, and a visible transfer queue.
 - Hidden files inside uploaded folders are skipped. Symbolic links are rejected.
-- No recursive folder downloads, delete, rename, resume, or cancellation yet.
+- No recursive folder downloads, resume, or cancellation yet.
 - Keep the phone connected during transfers. A failed upload may leave an
   incomplete file on Android; inspect/remove it using the phone before retrying.
 - Android protected app folders may not be accessible through MTP.

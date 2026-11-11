@@ -85,3 +85,9 @@ int mtp_rename(MTPSession *s, uint32_t id, const char *name) {
     if(result != 0) return fail(s, "Could not rename item on the phone");
     return 0;
 }
+int mtp_delete(MTPSession *s, uint32_t id) {
+    if(!s->device) return fail(s, "Connect your phone first.");
+    LIBMTP_Clear_Errorstack(s->device);
+    if(LIBMTP_Delete_Object(s->device, id) != 0) return fail(s, "Could not delete item from the phone");
+    return 0;
+}

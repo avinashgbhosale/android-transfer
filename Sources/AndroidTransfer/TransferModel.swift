@@ -190,6 +190,29 @@ final class TransferModel: ObservableObject {
             }
         }
     }
+    func deleteSelected() {
+        guard connected, !busy, current.storage != 0, let entry = selected else { return }
+        let alert = NSAlert()
+        alert.alertStyle = .critical
+        alert.messageText = "Permanently delete \(entry.name)?"
+        alert.informativeText = entry.folder
+            ? "The folder and everything inside it will be deleted from the phone. This cannot be undone."
+            : "The file will be deleted from the phone. This cannot be undone."
+        alert.addButton(withTitle: "Cancel")
+        alert.addButton(withTitle: "Delete")
+        alert.buttons[1].hasDestructiveAction = true
+        guard alert.runModal() == .alertSecondButtonReturn else { return }
+        let location = current
+        run("Deleting \(entry.name)…") {
+            try self.check(mtp_delete(self.session, entry.object))
+            let entries = try self.list(location)
+            DispatchQueue.main.async {
+                self.entries = entries
+                self.selection = nil
+                self.status = "Deleted \(entry.name)."
+            }
+        }
+    }
     func disconnect() {
         run("Disconnecting…") {
             if let session = self.session { mtp_destroy(session); self.session = nil }
