@@ -33,16 +33,39 @@ for library in "$APP/Contents/Frameworks/"*.dylib; do
     install_name_tool -id "@executable_path/../Frameworks/$(basename "$library")" "$library"
     codesign --force --sign - "$library"
 done
+
+# Build the macOS icon from the version-controlled 1024 px master artwork.
+icon_work="$(mktemp -d /tmp/android-transfer-icon.XXXXXX)"
+trap 'rm -rf "$icon_work"' EXIT
+iconset="$icon_work/AppIcon.iconset"
+mkdir -p "$iconset"
+for specification in \
+    '16 icon_16x16.png' \
+    '32 icon_16x16@2x.png' \
+    '32 icon_32x32.png' \
+    '64 icon_32x32@2x.png' \
+    '128 icon_128x128.png' \
+    '256 icon_128x128@2x.png' \
+    '256 icon_256x256.png' \
+    '512 icon_256x256@2x.png' \
+    '512 icon_512x512.png' \
+    '1024 icon_512x512@2x.png'; do
+    read -r size filename <<< "$specification"
+    sips -z "$size" "$size" Resources/AppIcon.png --out "$iconset/$filename" >/dev/null
+done
+iconutil -c icns "$iconset" -o "$APP/Contents/Resources/AppIcon.icns"
+
 cat > "$APP/Contents/Info.plist" <<'PLIST'
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0"><dict>
 <key>CFBundleExecutable</key><string>AndroidTransfer</string>
 <key>CFBundleIdentifier</key><string>local.android-transfer</string>
+<key>CFBundleIconFile</key><string>AppIcon</string>
 <key>CFBundleName</key><string>Android Transfer</string>
 <key>CFBundlePackageType</key><string>APPL</string>
 <key>CFBundleShortVersionString</key><string>1.3</string>
-<key>CFBundleVersion</key><string>4</string>
+<key>CFBundleVersion</key><string>5</string>
 <key>LSMinimumSystemVersion</key><string>26.0</string>
 <key>NSHighResolutionCapable</key><true/>
 <key>NSLocalNetworkUsageDescription</key><string>Transfer files directly between your phone and Mac on the same Wi-Fi network.</string>
